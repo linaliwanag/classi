@@ -88,7 +88,7 @@ const BuildTable: React.FC<BuildTableProps> = ({ build }) => {
   }
 
   return (
-    <div className="bg-parchment border border-brown-500 rounded overflow-hidden">
+    <div className="rounded overflow-hidden">
       <table className="w-full">
         <thead>
           <tr className="border-b border-brown-500">

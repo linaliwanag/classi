@@ -16,8 +16,8 @@ const BuildInputForm = () => {
     }
 
     return (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-            {/* Left Panel - Input */}
+        <div className="space-y-6">
+            {/* Input Section */}
             <div className="space-y-4">
                 <label className="block font-serif text-lg font-semibold">
                     Describe your character:
@@ -39,15 +39,17 @@ const BuildInputForm = () => {
                 </button>
             </div>
 
-            {/* Right Panel - Build Table */}
-            <div className="space-y-4">
-                {build && <BuildTable build={build} />}
-                {loading && (
-                    <div className="bg-parchment border border-brown-500 p-8 rounded text-center">
-                        <p className="font-serif text-black">Generating your build...</p>
-                    </div>
-                )}
-            </div>
+            {/* Build Output Section */}
+            {build && (
+                <div className="border border-brown-500 rounded bg-parchment overflow-hidden">
+                    <BuildTable build={build} />
+                </div>
+            )}
+            {loading && (
+                <div className="bg-parchment border border-brown-500 p-8 rounded text-center">
+                    <p className="font-serif text-black">Generating your build...</p>
+                </div>
+            )}
         </div>
     )
 }
