@@ -103,10 +103,10 @@ const BuildTable: React.FC<BuildTableProps> = ({ build }) => {
         <tbody>
           {buildData.map((item, index) => (
             <tr key={index} className="border-b border-brown-500 last:border-b-0">
-              <td className="p-3 font-serif text-black border-r border-brown-500 bg-brown-100">
+              <td className="p-3 font-serif text-black border-r border-brown-500 bg-brown-100 align-top">
                 {item.level}
               </td>
-              <td className="p-3 font-serif text-black">
+              <td className="p-3 font-serif text-black align-top">
                 {formatDescription(item.description)}
               </td>
             </tr>
