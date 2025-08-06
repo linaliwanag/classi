@@ -23,7 +23,7 @@ const App: React.FC = () => {
       </div>
 
       {/* Disclaimer Footer */}
-      <div className="mt-12 pt-6 border-t border-brown-300">
+      <div className="mt-12 pt-6 border-t border-brown-400">
         <div className="max-w-4xl mx-auto px-6">
           <p className="text-sm text-brown-600 font-serif text-center">
             Classi is a fan-made tool and is not affiliated with Baldur's Gate 3, Larian Studios, or Wizards of the Coast in any capacity.
