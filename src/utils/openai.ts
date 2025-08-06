@@ -28,7 +28,5 @@ export async function getBuildResponse(input: string): Promise<string> {
         },
     });
 
-    console.log("KEY:", API_KEY);
-
     return response.data.choices[0].message.content;
 }

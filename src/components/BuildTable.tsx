@@ -28,6 +28,10 @@ const BuildTable: React.FC<BuildTableProps> = ({ build }) => {
 
   // Format the description text to handle bullet points and numbered lists
   const formatDescription = (description: string) => {
+    if (!description || typeof description !== 'string') {
+      return <span>{description || ''}</span>;
+    }
+
     // Split by common bullet point patterns
     const parts = description.split(/(?=\d+\.|•|-)/);
 
@@ -36,59 +40,39 @@ const BuildTable: React.FC<BuildTableProps> = ({ build }) => {
       return <span>{description}</span>;
     }
 
-    // Group items by type
-    const groupedItems: { [key: string]: string[] } = {};
-    let currentType = 'General';
-
-    parts.forEach((part) => {
-      const trimmedPart = part.trim();
-      if (!trimmedPart) return;
-
-      // Check if it's a numbered item (1. 2. etc.)
-      const numberedMatch = trimmedPart.match(/^(\d+)\.\s*(.+)$/);
-      if (numberedMatch) {
-        const item = numberedMatch[2];
-
-        // Try to detect the type from the item content
-        const typeMatch = item.match(/^(Spells?|Traits?|Perks?|Abilities?|Features?|Skills?):\s*(.+)$/i);
-        if (typeMatch) {
-          currentType = typeMatch[1];
-          if (!groupedItems[currentType]) {
-            groupedItems[currentType] = [];
-          }
-          groupedItems[currentType].push(typeMatch[2]);
-        } else {
-          if (!groupedItems[currentType]) {
-            groupedItems[currentType] = [];
-          }
-          groupedItems[currentType].push(item);
-        }
-      } else {
-        // Regular text or bullet points
-        if (!groupedItems[currentType]) {
-          groupedItems[currentType] = [];
-        }
-        groupedItems[currentType].push(trimmedPart);
-      }
-    });
-
     return (
-      <div className="space-y-2">
-        {Object.entries(groupedItems).map(([type, items]) => (
-          <div key={type} className="space-y-1">
-            <div className="font-semibold text-brown-600 text-sm uppercase tracking-wide">
-              {type}
-            </div>
-            <div className="ml-4 space-y-1">
-              {items.map((item, index) => (
-                <div key={index} className="flex items-start">
-                  <span className="text-brown-500 mr-2 mt-1">•</span>
-                  <span>{item}</span>
-                </div>
-              ))}
-            </div>
-          </div>
-        ))}
+      <div className="space-y-1">
+        {parts.map((part, index) => {
+          const trimmedPart = part?.trim();
+          if (!trimmedPart) return null;
+
+          // Check if it's a numbered item (1. 2. etc.)
+          const numberedMatch = trimmedPart.match(/^(\d+)\.\s*(.+)$/);
+          if (numberedMatch && numberedMatch[2]) {
+            return (
+              <div key={index} className="flex items-start">
+                <span className="font-semibold text-brown-600 mr-2 min-w-[1.5rem]">
+                  {numberedMatch[1]}.
+                </span>
+                <span>{numberedMatch[2]}</span>
+              </div>
+            );
+          }
+
+          // Check if it's a bullet point (• or -)
+          const bulletMatch = trimmedPart.match(/^[•-]\s*(.+)$/);
+          if (bulletMatch && bulletMatch[1]) {
+            return (
+              <div key={index} className="flex items-start">
+                <span className="text-brown-600 mr-2">•</span>
+                <span>{bulletMatch[1]}</span>
+              </div>
+            );
+          }
+
+          // Regular text
+          return <span key={index}>{trimmedPart}</span>;
+        })}
       </div>
     );
   };
