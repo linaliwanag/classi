@@ -1,13 +1,13 @@
 import React, { useState } from 'react';
 import { getBuildResponse } from '../utils/openai.ts';
+import BuildTable from './BuildTable';
 
 const BuildInputForm = () => {
-    const [input, setInput] = useState('');
+    const [input, setInput] = useState('a drow rogue who wants to multiclass');
     const [build, setBuild] = useState('');
     const [loading, setLoading] = useState(false);
 
     const handleSubmit = async (e: React.FormEvent) => {
-        console.log("API KEY:", import.meta.env.VITE_OPENROUTER_API_KEY);
         e.preventDefault();
         setLoading(true);
         const result = await getBuildResponse(input)
@@ -16,32 +16,38 @@ const BuildInputForm = () => {
     }
 
     return (
-        <div className="p-4 max-w-2xl mx-auto">
-            <form onSubmit={handleSubmit}>
-                <label className="block font-semibold mb-2">
-                    Describe your character.
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Left Panel - Input */}
+            <div className="space-y-4">
+                <label className="block font-serif text-lg font-semibold">
+                    Describe your character:
                 </label>
                 <textarea
-                    className="w-full p-3 border border-gray-300 rounded-md"
+                    className="w-full p-4 border border-brown-500 rounded bg-parchment font-serif text-black resize-none"
+                    rows={6}
                     value={input}
                     onChange={(e) => setInput(e.target.value)}
                     placeholder="E.g. A drow rogue who wants to multiclass into something magical..."
                 />
-                <button className="mt-3 px-4 py-2 bg-purple-700 text-white rounded hover:bg-purple-800"
-                    type="submit"
+                <button
+                    className="px-6 py-3 bg-parchment border border-brown-500 rounded font-serif text-black hover:bg-brown-100 transition-colors disabled:opacity-50"
+                    type="button"
                     disabled={loading || !input}
+                    onClick={handleSubmit}
                 >
                     {loading ? 'Generating...' : 'Generate Build'}
                 </button>
-            </form>
+            </div>
 
-            {
-                build && (
-                    <div className="mt-6 bg-gray-100 p-4 rounded whitespace-pre-wrap">
-                        {build}
+            {/* Right Panel - Build Table */}
+            <div className="space-y-4">
+                {build && <BuildTable build={build} />}
+                {loading && (
+                    <div className="bg-parchment border border-brown-500 p-8 rounded text-center">
+                        <p className="font-serif text-black">Generating your build...</p>
                     </div>
-                )
-            }
+                )}
+            </div>
         </div>
     )
 }
