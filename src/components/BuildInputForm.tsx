@@ -30,7 +30,7 @@ const BuildInputForm = () => {
                     placeholder="E.g. A drow rogue who wants to multiclass into something magical..."
                 />
                 <button
-                    className="px-6 py-3 bg-parchment border border-brown-500 rounded font-serif text-black hover:bg-brown-100 transition-colors disabled:opacity-50"
+                    className="px-6 py-3 bg-parchment border border-brown-500 rounded font-serif text-black hover:bg-brown-200 transition-colors disabled:opacity-50"
                     type="button"
                     disabled={loading || !input}
                     onClick={handleSubmit}

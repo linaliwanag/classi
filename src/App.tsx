@@ -4,7 +4,7 @@ import D20Icon from "./components/D20Icon";
 
 const App: React.FC = () => {
   return (
-    <div className="min-h-screen bg-parchment text-black">
+    <div className="min-h-screen bg-brown-300 text-black">
       <div className="p-6">
         <div className="max-w-4xl mx-auto">
           {/* Header */}
