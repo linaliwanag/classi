@@ -1,6 +1,6 @@
 import React from "react";
 import BuildInputForm from "./components/BuildInputForm";
-import D20Icon from "./components/D20Icon";
+// import D20Icon from "./components/D20Icon";
 
 const App: React.FC = () => {
   return (
