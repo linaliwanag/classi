@@ -10,7 +10,7 @@ const BuildTable: React.FC<BuildTableProps> = ({ build }) => {
     const lines = buildText.split('\n').filter(line => line.trim());
     const buildData: { level: string; description: string }[] = [];
 
-    lines.forEach((line, index) => {
+    lines.forEach((line) => {
       // Look for level patterns like "Level 1:", "Level 2:", etc.
       const levelMatch = line.match(/Level\s+(\d+):/i);
       if (levelMatch) {
