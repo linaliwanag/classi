@@ -1,37 +1,177 @@
-import React from "react";
-import BuildInputForm from "./components/BuildInputForm";
-// import D20Icon from "./components/D20Icon";
+import { useCallback, useEffect, useRef, useState } from 'react';
+import BuildView from './components/BuildView';
+import ConceptForm from './components/ConceptForm';
+import HistoryPanel from './components/HistoryPanel';
+import { type BuildDraft, generateBuild } from './lib/api';
+import type { Build } from './lib/build';
+import {
+  type HistoryEntry,
+  addEntry,
+  createEntry,
+  loadHistory,
+  removeEntry,
+  saveHistory,
+} from './lib/history';
 
-const App: React.FC = () => {
+type Status = 'idle' | 'streaming' | 'done' | 'error';
+
+const emptyDraft = (): BuildDraft => ({ levels: [] });
+
+/** A finished build already has every field a draft can show. */
+const toDraft = (build: Build): BuildDraft => ({ ...build });
+
+export default function App() {
+  const [concept, setConcept] = useState('');
+  const [status, setStatus] = useState<Status>('idle');
+  const [draft, setDraft] = useState<BuildDraft>(emptyDraft);
+  const [build, setBuild] = useState<Build | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [history, setHistory] = useState<HistoryEntry[]>(loadHistory);
+  const [activeId, setActiveId] = useState<string | null>(null);
+
+  /** The in-flight request, so it can be cancelled and staleness detected. */
+  const requestRef = useRef<AbortController | null>(null);
+
+  useEffect(() => () => requestRef.current?.abort(), []);
+  useEffect(() => {
+    saveHistory(history);
+  }, [history]);
+
+  const generate = useCallback(async (rawConcept: string) => {
+    const trimmed = rawConcept.trim();
+    if (trimmed.length === 0) {
+      setError('Describe your character first.');
+      setStatus('error');
+      return;
+    }
+
+    // Supersede any request already running.
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
+    // A superseded request must not write state over its replacement's.
+    const isCurrent = () => requestRef.current === controller;
+
+    setStatus('streaming');
+    setError(null);
+    setBuild(null);
+    setActiveId(null);
+    setDraft(emptyDraft);
+
+    try {
+      const result = await generateBuild(trimmed, {
+        signal: controller.signal,
+        onProgress: (next) => {
+          if (isCurrent()) setDraft(next);
+        },
+      });
+      if (!isCurrent()) return;
+
+      const entry = createEntry(trimmed, result);
+      setBuild(result);
+      setDraft(toDraft(result));
+      setStatus('done');
+      setHistory((current) => addEntry(current, entry));
+      setActiveId(entry.id);
+    } catch (caught) {
+      if (!isCurrent()) return;
+      // Cancelling is not a failure — return to a clean idle state.
+      if (caught instanceof DOMException && caught.name === 'AbortError') {
+        setStatus('idle');
+        return;
+      }
+      setError(
+        caught instanceof Error
+          ? caught.message
+          : 'Something went wrong generating that build. Try again.',
+      );
+      setStatus('error');
+    } finally {
+      // Whatever happened above, the button never stays stuck on "Generating…".
+      if (isCurrent()) requestRef.current = null;
+    }
+  }, []);
+
+  const cancel = useCallback(() => {
+    requestRef.current?.abort();
+  }, []);
+
+  const openEntry = useCallback((entry: HistoryEntry) => {
+    requestRef.current?.abort();
+    requestRef.current = null;
+    setConcept(entry.concept);
+    setBuild(entry.build);
+    setDraft(toDraft(entry.build));
+    setActiveId(entry.id);
+    setError(null);
+    setStatus('done');
+  }, []);
+
+  const streaming = status === 'streaming';
+  const showBuild = streaming || build !== null;
+
   return (
     <div className="min-h-screen bg-brown-300 text-black">
-      <div className="p-6">
-        <div className="max-w-4xl mx-auto">
-          {/* Header */}
-          <div className="mb-8">
-            <h1 className="text-4xl font-bold font-serif mb-4">
-              Classi 🎲
-            </h1>
-            <p className="text-lg font-serif max-w-2xl">
-              Describe your character concept, and Classi will generate a complete level 1-12 Baldur's Gate 3 build with roleplay flavor and mechanical synergy.
-            </p>
+      <div className="mx-auto max-w-4xl p-6">
+        <header className="mb-8">
+          <h1 className="mb-3 font-serif text-4xl font-bold">Classi 🎲</h1>
+          <p className="max-w-2xl font-serif text-lg">
+            Describe your character concept, and Classi will generate a complete level 1-12
+            Baldur’s Gate 3 build with roleplay flavour and mechanical synergy.
+          </p>
+        </header>
+
+        <main className="space-y-6">
+          <ConceptForm
+            concept={concept}
+            onConceptChange={setConcept}
+            onSubmit={() => void generate(concept)}
+            onCancel={cancel}
+            streaming={streaming}
+          />
+
+          {/* Assertive: a failed generation is the one thing a screen reader
+              user must not miss while waiting. */}
+          <div role="alert" aria-live="assertive">
+            {error !== null && (
+              <div className="rounded border border-brown-500 bg-parchment p-4">
+                <h2 className="font-serif font-bold text-brown-700">That didn’t work</h2>
+                <p className="mt-1">{error}</p>
+              </div>
+            )}
           </div>
 
-          {/* Main content */}
-          <BuildInputForm />
-        </div>
+          {showBuild && (
+            <BuildView
+              draft={draft}
+              concept={concept}
+              streaming={streaming}
+              complete={build}
+              onRegenerate={() => void generate(concept)}
+            />
+          )}
+
+          <HistoryPanel
+            entries={history}
+            activeId={activeId}
+            onOpen={openEntry}
+            onRemove={(id) => setHistory((current) => removeEntry(current, id))}
+            onClear={() => {
+              setHistory([]);
+              setActiveId(null);
+            }}
+          />
+        </main>
       </div>
 
-      {/* Disclaimer Footer */}
-      <div className="mt-12 pt-6 border-t border-brown-400">
-        <div className="max-w-4xl mx-auto px-6">
-          <p className="text-sm text-brown-600 font-serif text-center">
-            Classi is a fan-made tool and is not affiliated with Baldur's Gate 3, Larian Studios, or Wizards of the Coast in any capacity.
+      <footer className="mt-12 border-t border-brown-400 pt-6">
+        <div className="mx-auto max-w-4xl px-6 pb-6">
+          <p className="text-center font-serif text-sm text-brown-600">
+            Classi is a fan-made tool and is not affiliated with Baldur’s Gate 3, Larian Studios,
+            or Wizards of the Coast in any capacity.
           </p>
         </div>
-      </div>
+      </footer>
     </div>
   );
-};
-
-export default App;
+}

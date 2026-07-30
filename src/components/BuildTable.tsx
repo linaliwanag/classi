@@ -1,120 +1,82 @@
-import React from 'react';
+import type { BuildLevel } from '../lib/build';
+import { MAX_LEVEL } from '../lib/build';
 
-interface BuildTableProps {
-  build: string;
+type BuildTableProps = {
+  levels: BuildLevel[];
+  /** Show a placeholder row for the level still being generated. */
+  streaming?: boolean;
+};
+
+function PendingRow({ level }: { level: number }) {
+  return (
+    <tr className="border-b border-brown-400 last:border-b-0">
+      <th scope="row" className="p-3 align-top font-bold tabular-nums text-brown-600">
+        {level <= MAX_LEVEL ? level : ''}
+      </th>
+      <td className="p-3 align-top" colSpan={2}>
+        <span className="sr-only">Generating…</span>
+        <span className="flex animate-pulse flex-col gap-2" aria-hidden="true">
+          <span className="h-3 w-1/3 rounded bg-brown-300" />
+          <span className="h-3 w-3/4 rounded bg-brown-300" />
+        </span>
+      </td>
+    </tr>
+  );
 }
 
-const BuildTable: React.FC<BuildTableProps> = ({ build }) => {
-  // Parse the build string into levels and descriptions
-  const parseBuild = (buildText: string) => {
-    const lines = buildText.split('\n').filter(line => line.trim());
-    const buildData: { level: string; description: string }[] = [];
-
-    lines.forEach((line) => {
-      // Look for level patterns like "Level 1:", "Level 2:", etc.
-      const levelMatch = line.match(/Level\s+(\d+):/i);
-      if (levelMatch) {
-        const level = levelMatch[1];
-        const description = line.replace(/Level\s+\d+:\s*/i, '').trim();
-        buildData.push({ level, description });
-      } else if (buildData.length > 0) {
-        // If no level found, append to the last description
-        buildData[buildData.length - 1].description += ' ' + line.trim();
-      }
-    });
-
-    return buildData;
-  };
-
-  // Format the description text to handle bullet points and numbered lists
-  const formatDescription = (description: string) => {
-    if (!description || typeof description !== 'string') {
-      return <span>{description || ''}</span>;
-    }
-
-    // Split by common bullet point patterns
-    const parts = description.split(/(?=\d+\.|•|-)/);
-
-    if (parts.length <= 1) {
-      // No bullet points found, return as is
-      return <span>{description}</span>;
-    }
-
-    return (
-      <div className="space-y-1">
-        {parts.map((part, index) => {
-          const trimmedPart = part?.trim();
-          if (!trimmedPart) return null;
-
-          // Check if it's a numbered item (1. 2. etc.)
-          const numberedMatch = trimmedPart.match(/^(\d+)\.\s*(.+)$/);
-          if (numberedMatch && numberedMatch[2]) {
-            return (
-              <div key={index} className="flex items-start">
-                <span className="font-semibold text-brown-600 mr-2 min-w-[1.5rem]">
-                  {numberedMatch[1]}.
-                </span>
-                <span>{numberedMatch[2]}</span>
-              </div>
-            );
-          }
-
-          // Check if it's a bullet point (• or -)
-          const bulletMatch = trimmedPart.match(/^[•-]\s*(.+)$/);
-          if (bulletMatch && bulletMatch[1]) {
-            return (
-              <div key={index} className="flex items-start">
-                <span className="text-brown-600 mr-2">•</span>
-                <span>{bulletMatch[1]}</span>
-              </div>
-            );
-          }
-
-          // Regular text
-          return <span key={index}>{trimmedPart}</span>;
-        })}
-      </div>
-    );
-  };
-
-  const buildData = parseBuild(build);
-
-  if (buildData.length === 0) {
-    return (
-      <div className="bg-parchment border border-brown-500 p-4 rounded">
-        <pre className="whitespace-pre-wrap font-serif text-black">{build}</pre>
-      </div>
-    );
-  }
-
+/**
+ * The level-by-level progression.
+ *
+ * Takes already-validated data. There is no text parsing here by design: the
+ * model returns JSON and every field lands in its own cell, which is what
+ * removed the old bug where hyphenated words like "Half-Orc" were split into
+ * spurious bullet points.
+ */
+export default function BuildTable({ levels, streaming = false }: BuildTableProps) {
   return (
-    <div className="rounded overflow-hidden">
-      <table className="w-full">
+    <div className="overflow-x-auto">
+      <table className="w-full border-collapse text-left">
+        <caption className="sr-only">
+          Build progression from level 1 to {MAX_LEVEL}, listing the choices made at each level.
+        </caption>
         <thead>
-          <tr className="border-b border-brown-500">
-            <th className="text-left p-3 font-serif text-black border-r border-brown-500 bg-brown-100">
-              Level
+          <tr className="border-b-2 border-brown-500 bg-brown-200">
+            <th scope="col" className="w-14 p-3 font-semibold text-brown-700">
+              Lvl
             </th>
-            <th className="text-left p-3 font-serif text-black">
-              Build
+            <th scope="col" className="w-1/4 p-3 font-semibold text-brown-700">
+              Progression
+            </th>
+            <th scope="col" className="p-3 font-semibold text-brown-700">
+              Choices
             </th>
           </tr>
         </thead>
         <tbody>
-          {buildData.map((item, index) => (
-            <tr key={index} className="border-b border-brown-500 last:border-b-0">
-              <td className="p-3 font-serif text-black border-r border-brown-500 bg-brown-100 align-top">
-                {item.level}
-              </td>
-              <td className="p-3 font-serif text-black align-top">
-                {formatDescription(item.description)}
+          {levels.map((level) => (
+            <tr key={level.level} className="border-b border-brown-400 last:border-b-0">
+              <th
+                scope="row"
+                className="p-3 align-top font-bold tabular-nums text-brown-600"
+              >
+                {level.level}
+              </th>
+              <td className="p-3 align-top font-semibold">{level.progression}</td>
+              <td className="p-3 align-top">
+                <dl className="space-y-2">
+                  {level.entries.map((entry, index) => (
+                    <div key={`${entry.label}-${index}`}>
+                      <dt className="inline font-semibold text-brown-600">{entry.label}: </dt>
+                      <dd className="inline">{entry.detail}</dd>
+                    </div>
+                  ))}
+                </dl>
               </td>
             </tr>
           ))}
+          {streaming && <PendingRow level={levels.length + 1} />}
         </tbody>
       </table>
     </div>
   );
-};
-
-export default BuildTable; 
+}

@@ -3,6 +3,8 @@
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
     "target": "ES2023",
     "lib": ["ES2023"],
+    /* The dev middleware in vite.config.ts adapts Node req/res to Web Request. */
+    "types": ["node"],
     "module": "ESNext",
     "skipLibCheck": true,
 

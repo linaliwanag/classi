@@ -15,6 +15,9 @@ export default {
           400: '#c4a484',
           500: '#8b4513',
           600: '#654321',
+          // Darkest ink in the palette, for headings and emphasis. Clears WCAG
+          // AA against parchment, brown-200 and brown-300 alike.
+          700: '#4a3117',
         }
       },
       fontFamily: {
