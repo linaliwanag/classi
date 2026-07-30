@@ -17,6 +17,8 @@ and mechanical synergy.
   never reaches the browser.
 - **Local history** — the last 20 builds are kept in your browser and can be
   reopened, with no account required.
+- **Honest limits** — the remaining daily allowance is shown before you hit it,
+  and a rate limit explains which limit was reached and when it clears.
 - **Copy and download** — export any build as Markdown for Discord, Reddit or notes.
 - **Parchment theme** — serif typography and a brown palette, responsive down to
   phone width.
@@ -125,7 +127,8 @@ src/
 │   ├── BuildActions.tsx   # copy, download, regenerate
 │   ├── BuildTable.tsx     # level-by-level table
 │   ├── BuildView.tsx      # header, summary, table, roleplay notes
-│   ├── ConceptForm.tsx    # textarea, examples, submit
+│   ├── ConceptForm.tsx    # textarea, examples, submit, remaining allowance
+│   ├── ErrorNotice.tsx    # failure and limit messaging
 │   └── HistoryPanel.tsx   # past builds
 ├── lib/
 │   ├── api.ts             # browser client for /api/generate
@@ -133,7 +136,10 @@ src/
 │   ├── history.ts         # localStorage history
 │   ├── markdown.ts        # Markdown export
 │   ├── prompt.ts          # system prompt and concept validation
+│   ├── quota.ts           # per-browser daily courtesy limit
+│   ├── rateLimit.ts       # reading 429 signals, phrasing the wait
 │   ├── sse.ts             # reader for OpenRouter's SSE format
+│   ├── storage.ts         # guarded localStorage access
 │   ├── streamJson.ts      # incremental JSON reader for progressive rendering
 │   └── wire.ts            # NDJSON protocol between the function and the browser
 ├── App.tsx                # state and composition
@@ -171,17 +177,57 @@ written against standard `Request`/`Response` and Web Streams, so porting it to
 Cloudflare Pages or Netlify is a matter of moving the file and renaming the
 export, not rewriting it.
 
-### Before you make it public
+## Limits and abuse
 
-The proxy stops the key from leaking, but `/api/generate` is unauthenticated, so
-anyone who finds the URL can spend your credits. Two things worth doing:
+On the free model the risk is not money, it is **availability**: the whole app
+shares 50 requests a day, so one visitor can drain the pool before anyone else
+gets a build. `/api/generate` is unauthenticated, so anything that finds the URL
+can consume it.
 
-- Set a **credit limit** on the OpenRouter key.
-- Add rate limiting. Vercel's WAF can do per-IP limits without any code; a
-  durable per-user limit needs a store such as Upstash or Vercel KV.
+Three layers, from softest to hardest.
+
+### 1. Per-browser courtesy limit (in code)
+
+Each browser gets `DAILY_BUILD_LIMIT` builds a day — 10 by default, set in
+`src/lib/quota.ts` — counted in localStorage and reset at local midnight. The
+remaining count is shown *before* the limit is reached, and only successful
+generations are counted, so a failed build costs nobody an allowance.
+
+This is a courtesy limit, not a security control. It is client-side and anyone
+with devtools can clear it. It exists to spread the pool across people and to
+tell them where they stand, not to stop a determined actor.
+
+### 2. Clear messaging when a limit is hit (in code)
+
+A 429 from OpenRouter is classified into two cases that read very differently:
+
+- **Burst** — "Requests are arriving faster than the free tier allows. Try again
+  in 42 seconds." Derived from `Retry-After` or `X-RateLimit-Reset`.
+- **Daily allowance spent** — "Classi runs on a free model with an allowance
+  shared by everyone using it, and today's is spent. Nothing you did."
+
+The upstream text is always shown as secondary detail, so a real diagnostic is
+never hidden behind friendlier wording.
+
+### 3. Edge enforcement (dashboard, not code)
+
+The only layer that actually stops a bot. In **Vercel → Firewall → Configure →
+New Rule**: match path `/api/generate`, action **Rate Limit**, key on **IP**,
+fixed window. Something like 5 requests per 10 minutes is reasonable.
+
+Available on Hobby with 1,000,000 requests included, but note two constraints:
+the counting window maxes out at **10 minutes** (so a *daily* limit cannot be
+expressed there), and counters are tracked per region, so distributed traffic can
+exceed the configured limit.
+
+A true per-IP daily limit needs a shared store — Upstash Redis or Vercel KV.
+Worth adding only if abuse actually shows up.
+
+### Other guards
 
 The function caps `max_tokens` and concept length, which bounds the cost of any
-single request but not the number of requests.
+single request but not the number of requests. If you switch to a paid model,
+set a **credit limit** on the OpenRouter key as well.
 
 ## Usage
 

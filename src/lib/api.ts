@@ -13,6 +13,7 @@ import {
   parseBuild,
   parseBuildLevel,
 } from './build';
+import type { LimitKind } from './rateLimit';
 import { scanPartialJson, sliceJsonObject, tryParseJson } from './streamJson';
 import { decodeEvents } from './wire';
 
@@ -27,8 +28,32 @@ export type BuildDraft = {
   levels: BuildLevel[];
 };
 
+export type GenerateErrorKind = LimitKind | 'generic';
+
 /** An error with a message that is safe and useful to show the user. */
-export class GenerateError extends Error {}
+export class GenerateError extends Error {
+  /** Lets the UI phrase a limit differently from an outright failure. */
+  readonly kind: GenerateErrorKind;
+  /** Seconds until a retry is worth attempting, when the server said. */
+  readonly retryAfterSeconds: number | null;
+  /** The raw upstream text, shown as secondary detail so nothing is hidden. */
+  readonly detail: string | null;
+
+  constructor(
+    message: string,
+    options: {
+      kind?: GenerateErrorKind;
+      retryAfterSeconds?: number | null;
+      detail?: string | null;
+    } = {},
+  ) {
+    super(message);
+    this.name = 'GenerateError';
+    this.kind = options.kind ?? 'generic';
+    this.retryAfterSeconds = options.retryAfterSeconds ?? null;
+    this.detail = options.detail ?? null;
+  }
+}
 
 function asAbilityScores(value: unknown): AbilityScores | undefined {
   if (typeof value !== 'object' || value === null) return undefined;
@@ -138,17 +163,28 @@ export function finalizeBuild(buffer: string): Build {
   });
 }
 
-async function readError(response: Response): Promise<string> {
+async function readError(response: Response): Promise<GenerateError> {
+  let message = `The server returned an error (HTTP ${response.status}).`;
+  let kind: GenerateErrorKind = 'generic';
+  let retryAfterSeconds: number | null = null;
+  let detail: string | null = null;
+
   try {
     const body = (await response.json()) as unknown;
     if (typeof body === 'object' && body !== null) {
-      const error = (body as { error?: unknown }).error;
-      if (typeof error === 'string' && error.length > 0) return error;
+      const record = body as Record<string, unknown>;
+      if (typeof record.error === 'string' && record.error.length > 0) message = record.error;
+      if (record.kind === 'rate_limited' || record.kind === 'daily_quota') kind = record.kind;
+      if (typeof record.retryAfterSeconds === 'number' && Number.isFinite(record.retryAfterSeconds)) {
+        retryAfterSeconds = record.retryAfterSeconds;
+      }
+      if (typeof record.detail === 'string' && record.detail.length > 0) detail = record.detail;
     }
   } catch {
-    // fall through to the generic message
+    // Keep the generic message.
   }
-  return `The server returned an error (HTTP ${response.status}).`;
+
+  return new GenerateError(message, { kind, retryAfterSeconds, detail });
 }
 
 export type GenerateOptions = {
@@ -178,7 +214,7 @@ export async function generateBuild(
     throw new GenerateError('Could not reach the server. Check your connection and try again.');
   }
 
-  if (!response.ok) throw new GenerateError(await readError(response));
+  if (!response.ok) throw await readError(response);
   if (!response.body) throw new GenerateError('The server sent an empty response.');
 
   const reader = response.body.getReader();

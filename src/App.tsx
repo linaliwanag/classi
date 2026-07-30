@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import BuildView from './components/BuildView';
 import ConceptForm from './components/ConceptForm';
+import ErrorNotice from './components/ErrorNotice';
 import HistoryPanel from './components/HistoryPanel';
-import { type BuildDraft, generateBuild } from './lib/api';
+import { type BuildDraft, GenerateError, generateBuild } from './lib/api';
 import type { Build } from './lib/build';
 import {
   type HistoryEntry,
@@ -12,6 +13,15 @@ import {
   removeEntry,
   saveHistory,
 } from './lib/history';
+import {
+  type Quota,
+  isExhausted,
+  loadQuota,
+  nextResetAt,
+  recordBuild,
+  remainingBuilds,
+  saveQuota,
+} from './lib/quota';
 
 type Status = 'idle' | 'streaming' | 'done' | 'error';
 
@@ -25,9 +35,10 @@ export default function App() {
   const [status, setStatus] = useState<Status>('idle');
   const [draft, setDraft] = useState<BuildDraft>(emptyDraft);
   const [build, setBuild] = useState<Build | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<GenerateError | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>(loadHistory);
   const [activeId, setActiveId] = useState<string | null>(null);
+  const [quota, setQuota] = useState<Quota>(loadQuota);
 
   /** The in-flight request, so it can be cancelled and staleness detected. */
   const requestRef = useRef<AbortController | null>(null);
@@ -36,13 +47,32 @@ export default function App() {
   useEffect(() => {
     saveHistory(history);
   }, [history]);
+  useEffect(() => {
+    saveQuota(quota);
+  }, [quota]);
+
+  // A tab left open across midnight should notice its allowance refilled,
+  // rather than showing a stale "0 left" until the page is reloaded.
+  useEffect(() => {
+    const delay = Math.max(1000, nextResetAt() - Date.now()) + 1000;
+    const timer = setTimeout(() => setQuota(loadQuota()), delay);
+    return () => clearTimeout(timer);
+  }, [quota.day]);
 
   const generate = useCallback(async (rawConcept: string) => {
     const trimmed = rawConcept.trim();
     if (trimmed.length === 0) {
-      setError('Describe your character first.');
+      setError(new GenerateError('Describe your character first.'));
       setStatus('error');
       return;
+    }
+
+    // Read fresh rather than trusting state, so a day rollover is respected
+    // even if the timer above has not fired yet.
+    const current = loadQuota();
+    if (isExhausted(current)) {
+      setQuota(current);
+      return; // the form already explains this and disables submitting
     }
 
     // Supersede any request already running.
@@ -71,8 +101,11 @@ export default function App() {
       setBuild(result);
       setDraft(toDraft(result));
       setStatus('done');
-      setHistory((current) => addEntry(current, entry));
+      setHistory((entries) => addEntry(entries, entry));
       setActiveId(entry.id);
+      // Counted only on success — a failed generation should not cost anyone
+      // part of their allowance.
+      setQuota(recordBuild(current));
     } catch (caught) {
       if (!isCurrent()) return;
       // Cancelling is not a failure — return to a clean idle state.
@@ -81,9 +114,13 @@ export default function App() {
         return;
       }
       setError(
-        caught instanceof Error
-          ? caught.message
-          : 'Something went wrong generating that build. Try again.',
+        caught instanceof GenerateError
+          ? caught
+          : new GenerateError(
+              caught instanceof Error
+                ? caught.message
+                : 'Something went wrong generating that build. Try again.',
+            ),
       );
       setStatus('error');
     } finally {
@@ -128,17 +165,14 @@ export default function App() {
             onSubmit={() => void generate(concept)}
             onCancel={cancel}
             streaming={streaming}
+            buildsLeft={remainingBuilds(quota)}
+            resetAt={nextResetAt()}
           />
 
           {/* Assertive: a failed generation is the one thing a screen reader
               user must not miss while waiting. */}
           <div role="alert" aria-live="assertive">
-            {error !== null && (
-              <div className="rounded border border-brown-500 bg-parchment p-4">
-                <h2 className="font-serif font-bold text-brown-700">That didn’t work</h2>
-                <p className="mt-1">{error}</p>
-              </div>
-            )}
+            {error !== null && <ErrorNotice error={error} />}
           </div>
 
           {showBuild && (
@@ -155,7 +189,7 @@ export default function App() {
             entries={history}
             activeId={activeId}
             onOpen={openEntry}
-            onRemove={(id) => setHistory((current) => removeEntry(current, id))}
+            onRemove={(id) => setHistory((entries) => removeEntry(entries, id))}
             onClear={() => {
               setHistory([]);
               setActiveId(null);

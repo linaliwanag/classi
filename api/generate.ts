@@ -13,6 +13,7 @@
 
 import { BUILD_JSON_SCHEMA } from '../src/lib/build';
 import { ConceptError, buildMessages, normalizeConcept } from '../src/lib/prompt';
+import { isDailyQuotaMessage, parseRetryAfterSeconds } from '../src/lib/rateLimit';
 import { contentDelta, decodeSse, errorMessage } from '../src/lib/sse';
 import { STREAM_CONTENT_TYPE, encodeEvent } from '../src/lib/wire';
 
@@ -108,15 +109,30 @@ export default async function handler(request: Request): Promise<Response> {
 
   if (!upstream.ok || !upstream.body) {
     const detail = errorMessage(await upstream.text().catch(() => ''));
-    const status = upstream.status === 429 ? 429 : 502;
+
+    if (upstream.status === 429) {
+      // Two very different situations share this status code: this app has spent
+      // its whole daily free allowance, or requests are simply arriving too
+      // fast. The client phrases them differently, so classify here.
+      const daily = isDailyQuotaMessage(detail);
+      return jsonResponse(
+        {
+          error: daily
+            ? 'Classi has used up its free generations for today.'
+            : 'Too many requests in a short space of time.',
+          kind: daily ? 'daily_quota' : 'rate_limited',
+          retryAfterSeconds: parseRetryAfterSeconds(upstream.headers),
+          detail,
+        },
+        429,
+      );
+    }
+
     return jsonResponse(
       {
-        error:
-          upstream.status === 429
-            ? 'OpenRouter is rate limiting this key. Wait a moment and try again.'
-            : `OpenRouter rejected the request${detail ? `: ${detail}` : ` (HTTP ${upstream.status})`}.`,
+        error: `OpenRouter rejected the request${detail ? `: ${detail}` : ` (HTTP ${upstream.status})`}.`,
       },
-      status,
+      502,
     );
   }
 

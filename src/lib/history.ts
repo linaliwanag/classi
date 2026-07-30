@@ -11,6 +11,9 @@
  */
 
 import { type Build, parseBuild } from './build';
+import { type StorageLike, defaultStorage, readJson, writeJson } from './storage';
+
+export type { StorageLike };
 
 export const HISTORY_KEY = 'classi:history:v1';
 
@@ -24,23 +27,6 @@ export type HistoryEntry = {
   createdAt: number;
   build: Build;
 };
-
-/** The slice of the Storage interface this module needs. */
-export type StorageLike = Pick<Storage, 'getItem' | 'setItem' | 'removeItem'>;
-
-/**
- * localStorage access can throw outright — Safari private browsing, disabled
- * cookies, exhausted quota — so every touch is guarded and history degrades to
- * "not saved" instead of taking the page down.
- */
-function defaultStorage(): StorageLike | null {
-  try {
-    if (typeof localStorage === 'undefined') return null;
-    return localStorage;
-  } catch {
-    return null;
-  }
-}
 
 function parseEntry(value: unknown): HistoryEntry | null {
   if (typeof value !== 'object' || value === null) return null;
@@ -59,22 +45,7 @@ function parseEntry(value: unknown): HistoryEntry | null {
 }
 
 export function loadHistory(storage: StorageLike | null = defaultStorage()): HistoryEntry[] {
-  if (storage === null) return [];
-
-  let raw: string | null;
-  try {
-    raw = storage.getItem(HISTORY_KEY);
-  } catch {
-    return [];
-  }
-  if (raw === null) return [];
-
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(raw);
-  } catch {
-    return [];
-  }
+  const parsed = readJson(HISTORY_KEY, storage);
   if (!Array.isArray(parsed)) return [];
 
   const entries: HistoryEntry[] = [];
@@ -90,13 +61,7 @@ export function saveHistory(
   entries: HistoryEntry[],
   storage: StorageLike | null = defaultStorage(),
 ): boolean {
-  if (storage === null) return false;
-  try {
-    storage.setItem(HISTORY_KEY, JSON.stringify(entries.slice(0, MAX_HISTORY)));
-    return true;
-  } catch {
-    return false;
-  }
+  return writeJson(HISTORY_KEY, entries.slice(0, MAX_HISTORY), storage);
 }
 
 function newId(): string {
