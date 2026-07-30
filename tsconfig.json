@@ -1,4 +1,26 @@
 {
+  /*
+   * Vercel reads THIS file to typecheck the functions in api/, and it ignores
+   * project references entirely (its docs call them out as unsupported, along
+   * with path mappings). With no compilerOptions here it falls back to its own
+   * defaults, which use `node16` module resolution — that requires explicit
+   * .js extensions on relative imports and fails the build, even though the
+   * local `tsc -b` passes via the referenced projects below.
+   *
+   * So these options exist for Vercel's benefit. Local builds still go through
+   * the references; `files: []` means this project compiles nothing itself.
+   * Keep the resolution settings here in step with tsconfig.api.json.
+   */
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "skipLibCheck": true,
+    "strict": true,
+    "jsx": "react-jsx"
+  },
   "files": [],
   "references": [
     { "path": "./tsconfig.app.json" },
