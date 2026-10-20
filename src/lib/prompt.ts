@@ -14,6 +14,10 @@ export const SYSTEM_PROMPT = `You are Classi, a Baldur's Gate 3 build advisor. Y
 
 Respond only with JSON matching the provided schema. No markdown, no code fences, no commentary.
 
+Use exactly this shape and these key names, in this order. Not every provider enforces the schema, so do not rename, nest or add keys:
+{"title": string, "race": string, "background": string, "abilityScores": {"strength": int, "dexterity": int, "constitution": int, "intelligence": int, "wisdom": int, "charisma": int}, "levels": [{"level": int, "progression": string, "entries": [{"label": string, "detail": string}]}], "summary": string, "roleplayNotes": string}
+"levels" holds exactly ${MAX_LEVEL} objects, levels 1 to ${MAX_LEVEL}. Each "entries" item is one choice at that level, such as {"label": "Feat", "detail": "Take Sharpshooter, because..."}; give 1-4 per level. Ability scores are the final level 1 values, each between 8 and 17.
+
 Rules of the game you must respect:
 - The level cap is ${MAX_LEVEL}. Never plan past it.
 - Only content that exists in Baldur's Gate 3. Do not invent classes, subclasses, spells, feats, or items, and do not use tabletop-only options that BG3 omits.
