@@ -38,6 +38,11 @@ const DEFAULT_MODEL = 'google/gemma-4-26b-a4b-it:free';
  */
 const MAX_TOKENS = 6000;
 
+/** OpenRouter's refusal when no provider supports every requested parameter. */
+function isNoEndpointsMessage(detail: string): boolean {
+  return /no endpoints found that can handle the requested parameters/i.test(detail);
+}
+
 function jsonResponse(body: unknown, status: number): Response {
   return new Response(JSON.stringify(body), {
     status,
@@ -77,9 +82,8 @@ export default async function handler(request: Request): Promise<Response> {
   // rather than hardcoding a localhost URL that is wrong in production.
   const origin = request.headers.get('origin') ?? new URL(request.url).origin;
 
-  let upstream: Response;
-  try {
-    upstream = await fetch(OPENROUTER_URL, {
+  const callOpenRouter = (requireParameters: boolean) =>
+    fetch(OPENROUTER_URL, {
       method: 'POST',
       headers: {
         authorization: `Bearer ${apiKey}`,
@@ -97,12 +101,26 @@ export default async function handler(request: Request): Promise<Response> {
         max_tokens: MAX_TOKENS,
         stream: true,
         response_format: { type: 'json_schema', json_schema: BUILD_JSON_SCHEMA },
-        // Only route to providers that actually honour the schema, rather than
+        // Prefer providers that actually honour the schema, rather than
         // silently falling back to a provider that ignores it.
-        provider: { require_parameters: true },
+        provider: { require_parameters: requireParameters },
       }),
       signal: request.signal,
     });
+
+  let upstream: Response;
+  try {
+    upstream = await callOpenRouter(true);
+    // Free-model providers come and go. When none left honours the schema
+    // strictly, OpenRouter refuses outright — retry without the requirement.
+    // The system prompt still demands JSON and the client salvages imperfect
+    // output, which beats failing every request.
+    if (upstream.status === 404) {
+      const detail = errorMessage(await upstream.clone().text().catch(() => ''));
+      if (detail !== null && isNoEndpointsMessage(detail)) {
+        upstream = await callOpenRouter(false);
+      }
+    }
   } catch {
     return jsonResponse({ error: 'Could not reach OpenRouter. Check your connection.' }, 502);
   }
