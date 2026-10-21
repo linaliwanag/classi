@@ -204,6 +204,11 @@ export default function App() {
             Classi is a fan-made tool and is not affiliated with Baldur’s Gate 3, Larian Studios,
             or Wizards of the Coast in any capacity.
           </p>
+          <p className="mt-2 text-center font-serif text-sm text-brown-600">
+            <a href="/privacy.html" className="underline hover:text-brown-700">
+              Privacy
+            </a>
+          </p>
         </div>
       </footer>
     </div>
